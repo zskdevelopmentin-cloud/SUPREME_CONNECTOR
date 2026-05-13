@@ -1,0 +1,211 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  role      String   @default("viewer") // super_admin, admin, viewer
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Organization {
+  id        String    @id @default(cuid())
+  name      String
+  companies Company[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Company {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  gstin          String?
+  industry       String?
+  connectors     Connector[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  // Data
+  parties          Party[]
+  salesInvoices    SalesInvoice[]
+  purchaseInvoices PurchaseInvoice[]
+  inventoryItems   InventoryItem[]
+  stockMovements   StockMovement[]
+  ledgerEntries    LedgerEntry[]
+  payments         Payment[]
+  receipts         Receipt[]
+}
+
+model Connector {
+  id             String            @id @default(cuid())
+  companyId      String
+  company        Company           @relation(fields: [companyId], references: [id])
+  name           String
+  type           String            @default("tally")
+  status         String            @default("active") // active, disabled, offline
+  apiKey         String            @unique
+  lastSyncedAt   DateTime?
+  devices        ConnectorDevice[]
+  syncLogs       SyncLog[]
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+}
+
+model ConnectorDevice {
+  id          String    @id @default(cuid())
+  connectorId String
+  connector   Connector @relation(fields: [connectorId], references: [id])
+  deviceName  String
+  machineId   String
+  appVersion  String
+  lastSeen    DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model SyncLog {
+  id               String    @id @default(cuid())
+  connectorId      String
+  connector        Connector @relation(fields: [connectorId], references: [id])
+  batchId          String
+  status           String    // started, success, failed
+  recordsProcessed Int       @default(0)
+  errorMessage     String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+// ========================================
+// Business Data Models
+// ========================================
+
+model Party {
+  id         String   @id @default(cuid())
+  companyId  String
+  company    Company  @relation(fields: [companyId], references: [id])
+  externalId String
+  name       String
+  group      String?
+  gstin      String?
+  balance    Float    @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([companyId, externalId])
+}
+
+model SalesInvoice {
+  id         String   @id @default(cuid())
+  companyId  String
+  company    Company  @relation(fields: [companyId], references: [id])
+  externalId String
+  invoiceNo  String
+  date       DateTime
+  partyName  String
+  amount     Float
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([companyId, externalId])
+}
+
+model PurchaseInvoice {
+  id         String   @id @default(cuid())
+  companyId  String
+  company    Company  @relation(fields: [companyId], references: [id])
+  externalId String
+  invoiceNo  String
+  date       DateTime
+  partyName  String
+  amount     Float
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([companyId, externalId])
+}
+
+model InventoryItem {
+  id         String   @id @default(cuid())
+  companyId  String
+  company    Company  @relation(fields: [companyId], references: [id])
+  externalId String
+  name       String
+  group      String?
+  stock      Float    @default(0)
+  uom        String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([companyId, externalId])
+}
+
+model StockMovement {
+  id         String   @id @default(cuid())
+  companyId  String
+  company    Company  @relation(fields: [companyId], references: [id])
+  externalId String
+  itemName   String
+  date       DateTime
+  quantity   Float
+  type       String   // IN, OUT
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([companyId, externalId])
+}
+
+model LedgerEntry {
+  id         String   @id @default(cuid())
+  companyId  String
+  company    Company  @relation(fields: [companyId], references: [id])
+  externalId String
+  ledgerName String
+  date       DateTime
+  amount     Float
+  type       String   // DR, CR
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([companyId, externalId])
+}
+
+model Payment {
+  id         String   @id @default(cuid())
+  companyId  String
+  company    Company  @relation(fields: [companyId], references: [id])
+  externalId String
+  partyName  String
+  date       DateTime
+  amount     Float
+  mode       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([companyId, externalId])
+}
+
+model Receipt {
+  id         String   @id @default(cuid())
+  companyId  String
+  company    Company  @relation(fields: [companyId], references: [id])
+  externalId String
+  partyName  String
+  date       DateTime
+  amount     Float
+  mode       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([companyId, externalId])
+}
