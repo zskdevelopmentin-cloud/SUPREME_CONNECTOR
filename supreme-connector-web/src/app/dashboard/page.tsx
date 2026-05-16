@@ -151,7 +151,7 @@ export default async function DashboardOverview() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {company.connectors[0]?.syncLogs.slice(0, 5).map((log) => (
+              {company.connectors[0]?.syncLogs.slice(0, 5).map((log: any) => (
                 <tr key={log.id} className="hover:bg-slate-50 transition">
                   <td className="px-6 py-4">
                     <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${

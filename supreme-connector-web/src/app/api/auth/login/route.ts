@@ -34,7 +34,7 @@ export async function POST(request: Request) {
         id: user.id, 
         email: user.email, 
         name: user.name,
-        organizations: user.organizations.map(org => ({
+        organizations: user.organizations.map((org: any) => ({
           id: org.id,
           name: org.name,
           companies: org.companies

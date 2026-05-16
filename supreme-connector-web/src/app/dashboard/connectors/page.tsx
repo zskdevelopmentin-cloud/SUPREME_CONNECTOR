@@ -113,7 +113,7 @@ export default async function ConnectorsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {connectors.map((c) => (
+              {connectors.map((c: any) => (
                 <tr key={c.id} className="hover:bg-slate-50 transition">
                   <td className="px-6 py-4 font-medium text-slate-900">{c.name}</td>
                   <td className="px-6 py-4 text-sm text-slate-600 capitalize">{c.type}</td>
