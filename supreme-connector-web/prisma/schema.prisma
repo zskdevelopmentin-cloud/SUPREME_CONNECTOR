@@ -108,31 +108,7 @@ model Party {
   @@unique([companyId, externalId])
 }
 
-model SalesInvoice {
-  id         String   @id @default(cuid())
-  companyId  String
-  company    Company  @relation(fields: [companyId], references: [id])
-  externalId String
-  invoiceNo  String
-  date       DateTime
-  partyName  String
-  amount     Float
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
 
-  @@unique([companyId, externalId])
-}
-
-model PurchaseInvoice {
-  id         String   @id @default(cuid())
-  companyId  String
-  company    Company  @relation(fields: [companyId], references: [id])
-  externalId String
-  invoiceNo  String
-  date       DateTime
-  partyName  String
-  amount     Float
-  createdAt  DateTime @default(now())
 model InventoryItem {
   id           String             @id @default(cuid())
   companyId    String
