@@ -12,11 +12,17 @@ if (!admin.apps.length) {
     app = null;
   } else {
     try {
+      // Clean the private key: strip quotes and handle both literal \n and actual newlines
+      const cleanedKey = privateKey
+        .trim()
+        .replace(/^"|"$/g, '')
+        .replace(/\\n/g, '\n');
+
       app = admin.initializeApp({
         credential: admin.credential.cert({
           projectId,
           clientEmail,
-          privateKey: privateKey.replace(/\\n/g, '\n'),
+          privateKey: cleanedKey,
         }),
       });
     } catch (error) {
