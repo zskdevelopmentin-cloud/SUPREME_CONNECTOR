@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { v4 as uuidv4 } from 'uuid';
+import crypto from 'crypto';
 
 export async function POST(request: Request) {
   try {
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     const log = await prisma.syncLog.create({
       data: {
         connectorId: connector.id,
-        batchId: uuidv4().substring(0, 8).toUpperCase(),
+        batchId: crypto.randomUUID().substring(0, 8).toUpperCase(),
         status,
         recordsProcessed: recordsProcessed || 0,
         errorMessage: errorMessage || null
