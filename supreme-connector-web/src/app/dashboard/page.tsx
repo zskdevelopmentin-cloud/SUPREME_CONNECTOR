@@ -48,8 +48,7 @@ export default async function DashboardOverview() {
           salesInvoices: true,
           purchaseInvoices: true,
           inventoryItems: true,
-          payments: true,
-          syncLogs: true
+          payments: true
         }
       }
     }
