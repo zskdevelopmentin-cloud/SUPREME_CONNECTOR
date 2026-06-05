@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import prisma from "@/lib/prisma";
+import { db, fieldValue } from "@/lib/db";
 import { signJwt } from "@/lib/auth";
 
 export async function POST(request: Request) {
@@ -11,37 +11,48 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-    });
+    if (!db) {
+      return NextResponse.json({ error: "Database not initialized" }, { status: 500 });
+    }
 
-    if (existingUser) {
+    const userSnap = await db.collection("users").where("email", "==", email).limit(1).get();
+
+    if (!userSnap.empty) {
       return NextResponse.json({ error: "User already exists" }, { status: 400 });
     }
 
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    const user = await prisma.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-        name,
-        organizations: {
-          create: {
-            name: organizationName,
-          },
-        },
-      },
-      include: {
-        organizations: true,
-      },
+    const userRef = db.collection("users").doc();
+    const userId = userRef.id;
+
+    await userRef.set({
+      email,
+      password: hashedPassword,
+      name: name || null,
+      createdAt: fieldValue.serverTimestamp(),
     });
 
-    const token = await signJwt({ userId: user.id, email: user.email });
+    const orgRef = db.collection("organizations").doc();
+    const orgId = orgRef.id;
+    await orgRef.set({
+      userId,
+      name: organizationName,
+      createdAt: fieldValue.serverTimestamp(),
+    });
+
+    const companyRef = db.collection("companies").doc();
+    await companyRef.set({
+      organizationId: orgId,
+      name: `${organizationName} Company`,
+      createdAt: fieldValue.serverTimestamp(),
+    });
+
+    const token = await signJwt({ userId, email });
 
     const response = NextResponse.json({
       message: "User registered successfully",
-      user: { id: user.id, email: user.email, name: user.name },
+      user: { id: userId, email, name },
     });
 
     response.cookies.set("token", token, {

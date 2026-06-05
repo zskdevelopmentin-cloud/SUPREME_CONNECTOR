@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import { db, fieldValue } from "@/lib/db";
 
 export async function POST(request: Request) {
   try {
@@ -10,14 +10,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "API Key required" }, { status: 401 });
     }
 
-    const connector = await prisma.connector.findUnique({
-      where: { apiKey },
-      include: { company: true }
-    });
+    if (!db) {
+      return NextResponse.json({ error: "Database not initialized" }, { status: 500 });
+    }
 
-    if (!connector) {
+    const connectorSnap = await db.collection("connectors").where("apiKey", "==", apiKey).limit(1).get();
+
+    if (connectorSnap.empty) {
       return NextResponse.json({ error: "Invalid API Key" }, { status: 403 });
     }
+
+    const connectorDoc = connectorSnap.docs[0];
+    const connector = connectorDoc.data();
 
     const { data } = await request.json();
     
@@ -27,35 +31,36 @@ export async function POST(request: Request) {
     const items = Array.isArray(stockItems) ? stockItems : [stockItems];
 
     let count = 0;
+    let batch = db.batch();
+
     for (const item of items) {
       if (!item.NAME) continue;
 
-      await prisma.inventoryItem.upsert({
-        where: {
-          companyId_externalId: {
-            companyId: connector.companyId,
-            externalId: item.NAME // Use Name as externalId for Tally
-          }
-        },
-        update: {
-          name: item.NAME,
-          unit: item.BASEUNITS,
-          stock: parseFloat(item.CLOSINGBALANCE) || 0,
-        },
-        create: {
-          companyId: connector.companyId,
-          externalId: item.NAME,
-          name: item.NAME,
-          unit: item.BASEUNITS,
-          stock: parseFloat(item.CLOSINGBALANCE) || 0,
-        }
-      });
+      const docId = `${connector.companyId}_${item.NAME}`;
+      const itemRef = db.collection("inventoryItems").doc(docId);
+
+      batch.set(itemRef, {
+        companyId: connector.companyId,
+        externalId: item.NAME,
+        name: item.NAME,
+        unit: item.BASEUNITS || null,
+        stock: parseFloat(item.CLOSINGBALANCE) || 0,
+        updatedAt: fieldValue.serverTimestamp()
+      }, { merge: true });
+
       count++;
+      if (count % 450 === 0) {
+        await batch.commit();
+        batch = db.batch();
+      }
     }
 
-    await prisma.connector.update({
-      where: { id: connector.id },
-      data: { lastSyncedAt: new Date() }
+    if (count > 0 && count % 450 !== 0) {
+      await batch.commit();
+    }
+
+    await connectorDoc.ref.update({
+      lastSyncedAt: fieldValue.serverTimestamp()
     });
 
     return NextResponse.json({ success: true, count });

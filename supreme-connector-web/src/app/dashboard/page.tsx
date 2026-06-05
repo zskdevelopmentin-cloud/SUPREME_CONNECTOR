@@ -1,4 +1,4 @@
-import prisma from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { cookies } from "next/headers";
 import { verifyJwt } from "@/lib/auth";
 import { redirect } from "next/navigation";
@@ -24,68 +24,103 @@ export default async function DashboardOverview() {
     redirect("/login");
   }
 
-  // Get the user's first company for now
-  const company = await prisma.company.findFirst({
-    where: {
-      organization: {
-        userId: payload.userId as string
-      }
-    },
-    include: {
-      connectors: {
-        include: {
-          syncLogs: {
-            orderBy: { createdAt: 'desc' }
-          }
-        }
-      },
-      _count: {
-        select: {
-          parties: true,
-          salesInvoices: true,
-          purchaseInvoices: true,
-          inventoryItems: true,
-          payments: true
-        }
-      }
-    }
-  });
-
-  if (!company) {
+  if (!db) {
     return (
-      <div className="p-8 text-center">
-        <Building2 className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-        <h2 className="text-xl font-bold text-slate-800">No Company Found</h2>
-        <p className="text-slate-500 mt-2">Please set up a company in the settings to get started.</p>
-        <button className="mt-4 bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-500 transition">
-          Add Company
-        </button>
+      <div className="p-8 text-center text-rose-500 font-semibold">
+        Database not initialized.
       </div>
     );
   }
 
-  const connector = company.connectors[0];
-  const failedSyncs = await prisma.syncLog.count({
-    where: {
-      connector: {
-        companyId: company.id
-      },
-      status: "failed"
-    }
+  // Get user's organizations
+  const orgsSnap = await db.collection("organizations").where("userId", "==", payload.userId).limit(1).get();
+  
+  if (orgsSnap.empty) {
+    return (
+      <div className="p-8 text-center">
+        <Building2 className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+        <h2 className="text-xl font-bold text-slate-800">No Organization Found</h2>
+        <p className="text-slate-500 mt-2">Please register an organization profile first.</p>
+      </div>
+    );
+  }
+
+  const orgDoc = orgsSnap.docs[0];
+  
+  // Get first company under organization
+  const companiesSnap = await db.collection("companies").where("organizationId", "==", orgDoc.id).limit(1).get();
+  
+  if (companiesSnap.empty) {
+    return (
+      <div className="p-8 text-center">
+        <Building2 className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+        <h2 className="text-xl font-bold text-slate-800">No Company Found</h2>
+        <p className="text-slate-500 mt-2">Please set up a company to get started.</p>
+      </div>
+    );
+  }
+
+  const companyDoc = companiesSnap.docs[0];
+  const companyData = companyDoc.data();
+  const companyId = companyDoc.id;
+
+  // Get connectors for this company
+  const connectorsSnap = await db.collection("connectors").where("companyId", "==", companyId).get();
+  const connectors = connectorsSnap.docs.map(doc => {
+    const data = doc.data();
+    return {
+      id: doc.id,
+      ...data,
+      lastSyncedAt: data.lastSyncedAt?.toDate() || null,
+      createdAt: data.createdAt?.toDate() || null
+    } as any;
   });
 
+  const connector = connectors[0];
+
+  // Fetch count of parties, inventoryItems, salesInvoices, purchaseInvoices
+  const partiesCount = await db.collection("parties").where("companyId", "==", companyId).count().get();
+  const itemsCount = await db.collection("inventoryItems").where("companyId", "==", companyId).count().get();
+  const salesCount = await db.collection("salesInvoices").where("companyId", "==", companyId).count().get();
+  const purchaseCount = await db.collection("purchaseInvoices").where("companyId", "==", companyId).count().get();
+
+  const failedSyncs = await db.collection("sync_logs")
+    .where("companyId", "==", companyId)
+    .where("status", "==", "failed")
+    .count()
+    .get();
+
+  // Fetch sync logs for the main connector if it exists
+  let syncLogs: any[] = [];
+  if (connector) {
+    const logsSnap = await db.collection("sync_logs")
+      .where("connectorId", "==", connector.id)
+      .orderBy("createdAt", "desc")
+      .limit(5)
+      .get();
+    syncLogs = logsSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt?.toDate() || null
+      };
+    });
+  }
+
   const stats = [
-    { label: "Customers", value: company._count.parties, icon: Users, color: "text-blue-600", bg: "bg-blue-50" },
-    { label: "Products", value: company._count.inventoryItems, icon: Package, color: "text-emerald-600", bg: "bg-emerald-50" },
-    { label: "Sales", value: company._count.salesInvoices, icon: ArrowUpRight, color: "text-indigo-600", bg: "bg-indigo-50" },
-    { label: "Purchases", value: company._count.purchaseInvoices, icon: ArrowDownLeft, color: "text-orange-600", bg: "bg-orange-50" },
+    { label: "Customers", value: partiesCount.data().count, icon: Users, color: "text-blue-600", bg: "bg-blue-50" },
+    { label: "Products", value: itemsCount.data().count, icon: Package, color: "text-emerald-600", bg: "bg-emerald-50" },
+    { label: "Sales", value: salesCount.data().count, icon: ArrowUpRight, color: "text-indigo-600", bg: "bg-indigo-50" },
+    { label: "Purchases", value: purchaseCount.data().count, icon: ArrowDownLeft, color: "text-orange-600", bg: "bg-orange-50" },
   ];
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900">{company.name}</h1>
+          <h1 className="text-3xl font-bold text-slate-900">{companyData.name}</h1>
+          <p className="text-xs text-slate-500 mt-1">Company ID: <code className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-mono font-semibold text-[11px] select-all">{companyId}</code></p>
           <div className="flex items-center gap-4 mt-2">
             <span className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${
               connector?.status === 'active' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
@@ -118,10 +153,10 @@ export default async function DashboardOverview() {
               <div className={`p-2 rounded-xl ${stat.bg}`}>
                 <stat.icon className={`w-6 h-6 ${stat.color}`} />
               </div>
-              {failedSyncs > 0 && stat.label === "Sales" && (
+              {failedSyncs.data().count > 0 && stat.label === "Sales" && (
                 <div className="flex items-center gap-1 text-rose-600 bg-rose-50 px-2 py-1 rounded text-[10px] font-bold">
                   <AlertCircle className="w-3 h-3" />
-                  {failedSyncs} FAILED
+                  {failedSyncs.data().count} FAILED
                 </div>
               )}
             </div>
@@ -147,7 +182,7 @@ export default async function DashboardOverview() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {company.connectors[0]?.syncLogs.slice(0, 5).map((log: any) => (
+              {syncLogs.map((log: any) => (
                 <tr key={log.id} className="hover:bg-slate-50 transition">
                   <td className="px-6 py-4">
                     <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${
@@ -158,9 +193,10 @@ export default async function DashboardOverview() {
                   </td>
                   <td className="px-6 py-4 text-sm font-mono text-slate-600">{log.batchId}</td>
                   <td className="px-6 py-4 text-sm text-slate-600">{log.recordsProcessed}</td>
-                  <td className="px-6 py-4 text-sm text-slate-400">{new Date(log.createdAt).toLocaleString()}</td>
+                  <td className="px-6 py-4 text-sm text-slate-400">{log.createdAt ? new Date(log.createdAt).toLocaleString() : "-"}</td>
                 </tr>
-              )) || (
+              ))}
+              {syncLogs.length === 0 && (
                 <tr>
                   <td colSpan={4} className="px-6 py-12 text-center text-slate-400 italic">No sync logs found.</td>
                 </tr>

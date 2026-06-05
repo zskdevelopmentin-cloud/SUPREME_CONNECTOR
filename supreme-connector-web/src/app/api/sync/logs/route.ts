@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import { db, fieldValue } from "@/lib/db";
 import crypto from 'crypto';
 
 export async function POST(request: Request) {
@@ -11,27 +11,34 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "API Key required" }, { status: 401 });
     }
 
-    const connector = await prisma.connector.findUnique({
-      where: { apiKey }
-    });
+    if (!db) {
+      return NextResponse.json({ error: "Database not initialized" }, { status: 500 });
+    }
 
-    if (!connector) {
+    const connectorSnap = await db.collection("connectors").where("apiKey", "==", apiKey).limit(1).get();
+
+    if (connectorSnap.empty) {
       return NextResponse.json({ error: "Invalid API Key" }, { status: 403 });
     }
 
-    const { status, recordsProcessed, errorMessage } = await request.json();
+    const connectorDoc = connectorSnap.docs[0];
+    const connector = connectorDoc.data();
 
-    const log = await prisma.syncLog.create({
-      data: {
-        connectorId: connector.id,
-        batchId: crypto.randomUUID().substring(0, 8).toUpperCase(),
-        status,
-        recordsProcessed: recordsProcessed || 0,
-        errorMessage: errorMessage || null
-      }
+    const { status, recordsProcessed, errorMessage } = await request.json();
+    const batchId = crypto.randomUUID().substring(0, 8).toUpperCase();
+
+    const logRef = db.collection("sync_logs").doc();
+    await logRef.set({
+      connectorId: connectorDoc.id,
+      companyId: connector.companyId,
+      batchId,
+      status,
+      recordsProcessed: recordsProcessed || 0,
+      errorMessage: errorMessage || null,
+      createdAt: fieldValue.serverTimestamp()
     });
 
-    return NextResponse.json({ success: true, logId: log.id });
+    return NextResponse.json({ success: true, logId: logRef.id });
   } catch (error: any) {
     console.error("Sync Log Error:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });

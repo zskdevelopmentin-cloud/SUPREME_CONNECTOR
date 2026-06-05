@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import prisma from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { signJwt } from "@/lib/auth";
 
 export async function POST(request: Request) {
@@ -11,34 +11,51 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email },
-      include: {
-        organizations: {
-          include: {
-            companies: true,
-          },
-        },
-      },
-    });
+    if (!db) {
+      return NextResponse.json({ error: "Database not initialized" }, { status: 500 });
+    }
 
-    if (!user || !(await bcrypt.compare(password, user.password))) {
+    const userSnap = await db.collection("users").where("email", "==", email).limit(1).get();
+
+    if (userSnap.empty) {
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
     }
 
-    const token = await signJwt({ userId: user.id, email: user.email });
+    const userDoc = userSnap.docs[0];
+    const user = userDoc.data();
+    const userId = userDoc.id;
+
+    if (!(await bcrypt.compare(password, user.password))) {
+      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+    }
+
+    const orgsSnap = await db.collection("organizations").where("userId", "==", userId).get();
+    const organizations = [];
+    
+    for (const orgDoc of orgsSnap.docs) {
+      const orgData = orgDoc.data();
+      const companiesSnap = await db.collection("companies").where("organizationId", "==", orgDoc.id).get();
+      const companies = companiesSnap.docs.map(cDoc => ({
+        id: cDoc.id,
+        ...cDoc.data()
+      }));
+      
+      organizations.push({
+        id: orgDoc.id,
+        name: orgData.name,
+        companies
+      });
+    }
+
+    const token = await signJwt({ userId, email: user.email });
 
     const response = NextResponse.json({
       message: "Login successful",
       user: { 
-        id: user.id, 
+        id: userId, 
         email: user.email, 
         name: user.name,
-        organizations: user.organizations.map((org: any) => ({
-          id: org.id,
-          name: org.name,
-          companies: org.companies
-        }))
+        organizations
       },
     });
 

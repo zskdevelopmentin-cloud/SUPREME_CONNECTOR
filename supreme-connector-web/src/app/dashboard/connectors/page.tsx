@@ -1,4 +1,4 @@
-import prisma from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { cookies } from "next/headers";
 import { verifyJwt } from "@/lib/auth";
 import { redirect } from "next/navigation";
@@ -21,18 +21,46 @@ export default async function ConnectorsPage() {
     redirect("/login");
   }
 
-  const connectors = await prisma.connector.findMany({
-    where: {
-      company: {
-        organization: {
-          userId: payload.userId as string
-        }
-      }
-    },
-    include: {
-      company: true
+  if (!db) {
+    return (
+      <div className="p-8 text-center text-rose-500 font-semibold">
+        Database not initialized.
+      </div>
+    );
+  }
+
+  // Get user's organizations
+  const orgsSnap = await db.collection("organizations").where("userId", "==", payload.userId).get();
+  const orgIds = orgsSnap.docs.map(doc => doc.id);
+
+  let connectors: any[] = [];
+
+  if (orgIds.length > 0) {
+    // Get all companies under these organizations
+    const companiesSnap = await db.collection("companies").where("organizationId", "in", orgIds).get();
+    const companiesMap: Record<string, any> = {};
+    const companyIds: string[] = [];
+
+    companiesSnap.docs.forEach(doc => {
+      companiesMap[doc.id] = { id: doc.id, ...doc.data() };
+      companyIds.push(doc.id);
+    });
+
+    if (companyIds.length > 0) {
+      // Get all connectors for these companies
+      const connectorsSnap = await db.collection("connectors").where("companyId", "in", companyIds).get();
+      connectors = connectorsSnap.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          company: companiesMap[data.companyId] || { name: "Unknown" },
+          lastSyncedAt: data.lastSyncedAt?.toDate() || null,
+          createdAt: data.createdAt?.toDate() || null
+        };
+      });
     }
-  });
+  }
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
