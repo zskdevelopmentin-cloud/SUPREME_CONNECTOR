@@ -33,7 +33,11 @@ export interface LocalSyncLog {
   message?: string;
 }
 
-export default function ConnectorsClient() {
+export default function ConnectorsClient({
+  serverCompanyId
+}: {
+  serverCompanyId?: string;
+}) {
   const [config, setConfig] = useState<ConnectorConfig | null>(null);
   const [logs, setLogs] = useState<LocalSyncLog[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -124,6 +128,11 @@ export default function ConnectorsClient() {
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Connectors</h1>
           <p className="text-slate-500 mt-1">Manage local TallyPrime data sources and integration configs.</p>
+          {serverCompanyId && (
+            <p className="text-xs text-slate-500 mt-1.5">
+              Your Company ID: <code className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-mono font-semibold text-[11px] select-all">{serverCompanyId}</code>
+            </p>
+          )}
         </div>
         <button 
           onClick={handleOpenModal}

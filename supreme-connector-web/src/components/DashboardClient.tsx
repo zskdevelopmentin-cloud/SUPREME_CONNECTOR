@@ -28,7 +28,13 @@ interface DashboardStats {
   purchaseCount: number;
 }
 
-export default function DashboardClient() {
+export default function DashboardClient({
+  serverCompanyId,
+  serverCompanyName
+}: {
+  serverCompanyId?: string;
+  serverCompanyName?: string;
+}) {
   const router = useRouter();
   const [config, setConfig] = useState<ConnectorConfig | null>(null);
   const [stats, setStats] = useState<DashboardStats>({
@@ -199,6 +205,17 @@ export default function DashboardClient() {
         <p className="text-slate-500 mt-2 max-w-md mx-auto leading-relaxed">
           Please set up your local Tally connection details (host, port, and company name) to view statistics.
         </p>
+
+        {serverCompanyId && (
+          <div className="mt-6 p-5 bg-indigo-950/20 border border-slate-200/20 rounded-2xl max-w-md w-full text-left">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 text-center">Your Company ID</span>
+            <code className="bg-slate-900 text-indigo-300 px-3 py-2 rounded-xl font-mono font-bold text-xs select-all block text-center break-all border border-slate-800">
+              {serverCompanyId}
+            </code>
+            <span className="text-[10px] text-slate-500 mt-2 block text-center">Copy and use this ID when setting up your connector config.</span>
+          </div>
+        )}
+
         <button 
           onClick={() => router.push("/dashboard/connectors")}
           className="mt-6 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-6 py-2.5 rounded-xl shadow-lg transition flex items-center gap-1"
@@ -223,6 +240,11 @@ export default function DashboardClient() {
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">{config.companyName}</h1>
+          {serverCompanyId && (
+            <p className="text-xs text-slate-500 mt-1">
+              Company ID: <code className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-mono font-semibold text-[11px] select-all">{serverCompanyId}</code>
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-4 mt-2">
             <span className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${
               isTallyConnected ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
