@@ -1,4 +1,5 @@
 import Link from "next/link";
+import LogoutButton from "@/components/LogoutButton";
 
 export default function DashboardLayout({
   children,
@@ -23,6 +24,9 @@ export default function DashboardLayout({
             Sync Logs
           </Link>
         </nav>
+        <div className="p-4 border-t border-indigo-800/50">
+          <LogoutButton />
+        </div>
         <div className="p-4 bg-indigo-950 text-xs text-indigo-400 text-center">
           &copy; {new Date().getFullYear()} Reboxy Inc.
         </div>

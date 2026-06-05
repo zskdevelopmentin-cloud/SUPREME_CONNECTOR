@@ -1,6 +1,7 @@
 import prisma from "@/lib/prisma";
 import { cookies } from "next/headers";
 import { verifyJwt } from "@/lib/auth";
+import { redirect } from "next/navigation";
 import { 
   Plus, 
   Settings2, 
@@ -16,7 +17,9 @@ export default async function ConnectorsPage() {
   const token = cookies().get("token")?.value;
   const payload = token ? await verifyJwt(token) : null;
 
-  if (!payload) return <div className="p-8">Please login.</div>;
+  if (!payload) {
+    redirect("/login");
+  }
 
   const connectors = await prisma.connector.findMany({
     where: {

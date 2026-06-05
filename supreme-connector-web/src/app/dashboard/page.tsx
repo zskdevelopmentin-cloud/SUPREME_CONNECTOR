@@ -1,6 +1,7 @@
 import prisma from "@/lib/prisma";
 import { cookies } from "next/headers";
 import { verifyJwt } from "@/lib/auth";
+import { redirect } from "next/navigation";
 import { 
   Users, 
   Package, 
@@ -20,11 +21,7 @@ export default async function DashboardOverview() {
   const payload = token ? await verifyJwt(token) : null;
 
   if (!payload) {
-    return (
-      <div className="p-8 text-center">
-        <p className="text-slate-500">Please login to view your dashboard.</p>
-      </div>
-    );
+    redirect("/login");
   }
 
   // Get the user's first company for now

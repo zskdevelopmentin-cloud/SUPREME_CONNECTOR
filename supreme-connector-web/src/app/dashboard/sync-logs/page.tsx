@@ -1,8 +1,18 @@
 import { db } from "@/lib/db";
+import { cookies } from "next/headers";
+import { verifyJwt } from "@/lib/auth";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 export default async function SyncLogsPage() {
+  const token = cookies().get("token")?.value;
+  const payload = token ? await verifyJwt(token) : null;
+
+  if (!payload) {
+    redirect("/login");
+  }
+
   const logsSnap = await db.collection("sync_logs").orderBy("createdAt", "desc").limit(100).get();
   
   const logs = await Promise.all(logsSnap.docs.map(async (doc) => {
